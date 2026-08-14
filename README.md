@@ -1,226 +1,183 @@
-# todo
+# Agent Skills for the Software Development Lifecycle
 
-A fast, local, single-user command-line todo manager written in TypeScript.
+A portable toolkit of **skills**, **prompt commands**, and **subagents** for GitHub Copilot in
+VS Code. Drop the `.github/` folder into any repository and your coding agent gains a
+structured, opinionated process for every stage of the SDLC — from a vague idea, through
+specification, planning, implementation, review, and launch.
 
-Tasks are stored as plain JSON in the directory you run the command from, so every project
-folder gets its own independent todo list. No account, no network, no config file, no daemon.
+This repository is not an application. It is the process layer you point an agent at *before*
+it starts building one.
 
-> **Status: specified and planned, not yet implemented.**
-> This README documents the intended behaviour defined in [SPEC.md](SPEC.md). The
-> implementation is tracked in [tasks/todo.md](tasks/todo.md). Commands below will not run
-> until Phase 2 of the plan is complete.
+## The problem this solves
 
-## Why
+Coding agents are strong at generating code and weak at deciding what to build, in what order,
+and when to stop. Left alone they skip specifications, write everything in one pass, mark work
+done without running it, and quietly invent requirements nobody asked for.
 
-Most todo tools are either a full web app or a global list that mixes every project together.
-This one is scoped to a directory. `cd` into a project, run `todo list`, and you see only that
-project's tasks. Delete the folder and the list goes with it.
+These skills encode the discipline that prevents that: write the spec first, slice work into
+verifiable tasks, prove behaviour with a failing test before implementing, review across
+multiple axes, and gate anything irreversible behind human approval.
 
-## Requirements
+## Repository layout
 
-- Node.js 20.11 or newer
-- npm
+```
+.github/
+  skills/     24 skills — domain knowledge the agent loads on demand
+  prompts/     8 slash commands — workflow entry points you invoke directly
+  agents/      4 subagents — specialist personas for focused, delegated work
+```
 
-## Install
+## Installation
+
+Copy the `.github` directory into the root of the repository you want to work in:
 
 ```bash
-git clone <your-repo-url> my-app
-cd my-app
-npm install
-npm run build
+git clone https://github.com/sujithre/my-app.git
+cp -r my-app/.github /path/to/your-project/
 ```
 
-To make the `todo` command available globally on your machine:
+On Windows PowerShell:
 
-```bash
-npm link
+```powershell
+git clone https://github.com/sujithre/my-app.git
+Copy-Item -Recurse my-app\.github C:\path\to\your-project\
 ```
 
-Without `npm link`, run it directly:
+Reload VS Code. The prompts become available as `/` commands in Copilot Chat, and the agent
+discovers the skills and subagents automatically.
 
-```bash
-node dist/cli.js list
-```
+## Prompt commands
 
-## Usage
+Each prompt is a workflow entry point. Type it in Copilot Chat, optionally with arguments.
 
-```
-todo add <title>              Add a new task
-todo list [--all]             List pending tasks; --all includes completed ones
-todo done <id>                Mark a task as completed
-todo delete <id>              Permanently remove a task
-todo --help                   Show usage
-todo --version               Show the version
-```
+| Command | What it does |
+|---|---|
+| `/spec` | Start spec-driven development — interviews you, then writes a structured specification before any code |
+| `/plan` | Break the spec into small verifiable tasks with acceptance criteria and dependency ordering |
+| `/build` | Implement the next pending task: failing test, implementation, regression run, build, commit |
+| `/build auto` | Implement the entire plan in one approved pass, still test-driven, one commit per task |
+| `/test` | Run the TDD workflow; for bug reports it uses the Prove-It pattern to reproduce first |
+| `/review` | Five-axis code review — correctness, readability, architecture, security, performance |
+| `/code-simplify` | Reduce complexity without changing behaviour |
+| `/webperf` | Web performance audit via the web-performance-auditor persona |
+| `/ship` | Pre-launch checklist fanned out to specialist personas, synthesized into a go/no-go call |
 
-### `todo add <title>`
-
-Creates a new task with the next available id. The title should be quoted if it contains
-spaces. Prints the id of the task it created.
-
-```bash
-todo add "write the parser"
-```
-
-### `todo list [--all]`
-
-Prints your tasks, one per line, with the id you use for `done` and `delete`. By default only
-pending tasks are shown; pass `--all` to include completed ones.
-
-```bash
-todo list
-todo list --all
-```
-
-If there is no todo list in the current directory, it prints `No tasks yet.` and exits
-cleanly — it will not create a file just because you looked.
-
-### `todo done <id>`
-
-Marks a task complete and records the completion time. The task disappears from `todo list`
-but remains visible under `todo list --all`. Marking an already-completed task is harmless.
-
-```bash
-todo done 2
-```
-
-### `todo delete <id>`
-
-Removes a task permanently and immediately — there is no confirmation prompt and no undo.
-Ids of the remaining tasks do not change, and the deleted id is never reused.
-
-```bash
-todo delete 2
-```
-
-## Example session
-
-Starting in an empty project directory:
-
-```console
-$ todo list
-No tasks yet.
-
-$ todo add "write the parser"
-Added task 1: write the parser
-
-$ todo add "write the tests"
-Added task 2: write the tests
-
-$ todo add "ship it"
-Added task 3: ship it
-
-$ todo list
-  1  [ ]  write the parser
-  2  [ ]  write the tests
-  3  [ ]  ship it
-
-$ todo done 1
-Completed task 1: write the parser
-
-$ todo list
-  2  [ ]  write the tests
-  3  [ ]  ship it
-
-$ todo list --all
-  1  [x]  write the parser
-  2  [ ]  write the tests
-  3  [ ]  ship it
-
-$ todo delete 3
-Deleted task 3: ship it
-
-$ todo add "write the docs"
-Added task 4: write the docs
-```
-
-Note the last step: the new task is id **4**, not 3. Ids are never recycled, so an id you
-wrote down always refers to the same task.
-
-## Where your data lives
-
-A single file, `todos.json`, in the directory where you ran the command. It is created the
-first time you add a task and is safe to read, edit by hand, commit, or delete.
-
-```jsonc
-{
-  "version": 1,
-  "nextId": 3,
-  "tasks": [
-    {
-      "id": 1,
-      "title": "write the parser",
-      "done": true,
-      "createdAt": "2026-08-14T10:00:00.000Z",
-      "completedAt": "2026-08-14T10:30:00.000Z"
-    },
-    {
-      "id": 2,
-      "title": "write the tests",
-      "done": false,
-      "createdAt": "2026-08-14T10:05:00.000Z",
-      "completedAt": null
-    }
-  ]
-}
-```
-
-Writes are atomic — the file is written to a temporary path and then renamed into place — so
-interrupting the command cannot leave you with a half-written list.
-
-## Exit codes
-
-Useful if you are calling `todo` from a script.
-
-| Code | Meaning | Example |
-|------|---------|---------|
-| `0` | Success | The command did what you asked |
-| `1` | User error | Unknown id, missing argument, unknown command |
-| `2` | Data error | `todos.json` is missing required fields or is not valid JSON |
-
-```bash
-todo done 999
-# → No task with id 999.   (stderr, exit code 1)
-```
-
-## Development
-
-```bash
-npm run dev -- add "task"   # Run from source without building
-npm run build               # Typecheck and emit to dist/
-npm run typecheck           # Typecheck only, no output
-npm test                    # Build, then run the full test suite
-npm run test:watch          # Re-run tests on change
-npm run coverage            # Tests with coverage thresholds enforced
-npm run lint                # ESLint
-npm run lint:fix            # ESLint with autofix
-npm run format              # Prettier
-```
-
-Tests use Node's built-in `node:test` runner. Unit tests cover the command logic as pure
-functions, integration tests exercise the store against a real temporary directory, and
-end-to-end tests spawn the built CLI and assert on stdout, stderr, and exit codes.
-
-## Project layout
+### The core loop
 
 ```
-src/
-  cli.ts            Entry point: argument parsing, exit codes, stderr
-  commands/         One file per command, all pure functions
-  store.ts          The only module that touches the filesystem
-  format.ts         Rendering tasks for the console
-  types.ts          Task and TodoFile shapes
-tests/              Unit, integration, and end-to-end tests
-SPEC.md             What we are building and why
-tasks/plan.md       Implementation plan and task breakdown
-tasks/todo.md       Ordered task checklist
+/spec  ──→  /plan  ──→  /build  ──→  /review  ──→  /ship
+  │           │           │            │            │
+  ▼           ▼           ▼            ▼            ▼
+SPEC.md   tasks/plan.md  code +      findings    go / no-go
+          tasks/todo.md  commits
 ```
 
-## Scope
+Each stage gates the next. `/build auto` refuses to run without a real spec at `SPEC.md`,
+`docs/SPEC.md`, or under `spec/` — a README does not count, precisely so the agent cannot
+invent requirements and call them yours.
 
-Deliberately not included: priorities, due dates, tags, subtasks, editing a task's title,
-sync, multi-user support, and interactive mode. See the non-goals section of
-[SPEC.md](SPEC.md) for the reasoning.
+## Example
+
+```
+/spec A CLI todo app in TypeScript, JSON file storage, add/list/done/delete
+```
+
+The agent surfaces its assumptions, asks about storage location, argument parsing, and test
+framework, then writes `SPEC.md` covering objective, commands, project structure, code style,
+testing strategy, and Always/Ask-first/Never boundaries.
+
+```
+/plan
+```
+
+It reads the spec, maps the dependency graph, slices the work vertically — one complete user
+path per task rather than horizontal layers — and writes `tasks/plan.md` and `tasks/todo.md`
+with acceptance criteria, verification steps, and human checkpoints between phases.
+
+```
+/build auto
+```
+
+It presents the plan once, waits for unambiguous approval, then works through every task
+test-first, committing each one separately so any point is a clean rollback. It stops and
+asks whenever it hits an ambiguity or anything irreversible.
+
+The `tasks/` directory in this repository holds real output from that first `/plan` run, kept
+as a sample of what the commands actually produce.
+
+## Skills
+
+Skills are loaded on demand when the task matches their description. You rarely invoke them
+directly — the prompts and the agent pull them in.
+
+**Getting started**
+- `using-agent-skills` — the meta-skill governing how the others are discovered
+- `context-engineering` — configuring context and rules files for a project
+- `interview-me` — extracting what you actually want, one question at a time
+- `idea-refine` — sharpening a vague idea through divergent and convergent thinking
+
+**Specify and plan**
+- `spec-driven-development` — write the specification before the code
+- `planning-and-task-breakdown` — dependency graphs, vertical slicing, task sizing
+- `api-and-interface-design` — stable contracts and module boundaries
+- `documentation-and-adrs` — recording decisions worth preserving
+
+**Build**
+- `test-driven-development` — red, green, refactor; the Prove-It pattern for bugs
+- `incremental-implementation` — small verified steps instead of one large pass
+- `source-driven-development` — ground every decision in official documentation
+- `frontend-ui-engineering` — accessible, responsive, production-quality interfaces
+- `code-simplification` — reduce complexity without changing behaviour
+
+**Verify**
+- `code-review-and-quality` — the five-axis review
+- `debugging-and-error-recovery` — systematic root-cause analysis over guessing
+- `doubt-driven-development` — adversarial review of confident decisions
+- `browser-testing-with-devtools` — real runtime data via Chrome DevTools MCP
+- `security-and-hardening` — untrusted input, auth, storage, integrations
+- `performance-optimization` — frontend, backend, queries, databases
+
+**Ship and operate**
+- `git-workflow-and-versioning` — commits, branches, semver, changelogs
+- `ci-cd-and-automation` — pipelines and quality gates
+- `shipping-and-launch` — pre-launch checklist, staged rollout, rollback
+- `observability-and-instrumentation` — logs, metrics, traces, alerting
+- `deprecation-and-migration` — sunsetting systems and moving users
+
+`skills/references/` holds shared checklists — definition of done, security, accessibility,
+performance, observability, testing patterns, and orchestration patterns — referenced by
+multiple skills rather than duplicated across them.
+
+## Subagents
+
+Specialist personas with their own context window. Delegating to one keeps its research and
+reasoning out of your main conversation.
+
+| Agent | Use for |
+|---|---|
+| `code-reviewer` | Thorough pre-merge review across all five dimensions |
+| `security-auditor` | Vulnerability detection, threat modeling, hardening |
+| `test-engineer` | Test strategy, writing suites, coverage analysis |
+| `web-performance-auditor` | Core Web Vitals, loading, rendering, network |
+
+## Design principles
+
+- **Gate every phase.** Specify, plan, build, and ship each end in a human review. The agent
+  does not advance itself past a gate.
+- **Acceptance criteria over instructions.** "Make the dashboard faster" becomes "LCP under
+  2.5s on 4G, CLS under 0.1" — something you can actually test against.
+- **Surface assumptions before writing.** Ambiguity resolved silently is the most expensive
+  kind of bug.
+- **Small, verified steps.** No task should touch more than about five files, and each one
+  leaves the system working.
+- **Boundaries are explicit.** Every spec declares what to always do, what to ask about
+  first, and what never to do.
+
+## Compatibility
+
+Built for GitHub Copilot in VS Code, using its skills, prompt files, and custom agents. The
+skill and prompt files are plain Markdown with YAML frontmatter, so they port to other agent
+tooling with minor frontmatter adjustments.
 
 ## License
 
